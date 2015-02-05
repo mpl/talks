@@ -1,0 +1,179 @@
+The State of Camlistore
+01 February 2015
+Tags: go, camlistore
+
+Mathieu Lonjaret
+mathieu.lonjaret@gmail.com
+@lejatorn
+
+http://camlistore.org/
+http://golang.org
+
+* Intro
+
+"Camlistore is a way to store, sync, share, model and back up content"
+
+See [[https://www.youtube.com/watch?v=kBCQq5hfsug][Camlistore at FOSDEM 2014]]
+
+Recap time.
+
+* Goals
+
+- Deploy it anywhere (own your data), stay in control
+- Dump all your data
+- Sound schema, indexing, and search to organize
+- interact with various clients:
+- ... web UI
+- ... CLI tools
+- ... FUSE
+- ... importers
+- ... mobile (Android and IOS)
+- ... other server/app
+
+* Components
+
+- blob server
+- schema
+- search
+
+* Blob server
+
+- "Blob": small (0B - 16MB) chunk of data. No metadata.
+- Go Interfaces: Fetch, ReceiveBlob, StatBlobs, EnumerateBlobs, RemoveBlobs
+- HTTP interface: {GET,PUT,HEAD} /sha1-xxxxxxx HTTP/1.1
+- advantages: easy sync, no merge logic, integrity checking, de-depuping...
+- implement anywhere: memory, local disk, S3, Google Drive, Google Cloud Storage...
+
+* Schema
+
+- blobs are immutable
+- but your data is mutable, so:
+- just use a specific blob as a reference, an anchor: a *permanode*
+- mutation (key/values) == a *claim* (again, just a blob) targeting this permanode
+- all the claims on this permanode == current state of your data
+- everything GPG-signed
+
+* Search
+
+- index with sorted.KeyValue: Get, Set, Find (iterator)
+- implement sorted interface anywhere: MySQL, SQLite, Postgres, Mongo, LevelDB, cznic/kv...
+- search with high-level queries and describe requests, with HTTP API for clients
+
+* What's new since fosdem 2014
+
+- importers (Picasa, Twitter, Foursquare, Flickr...) improved/redone
+- publisher app
+- lots of web UI improvements
+- more (cam)tools
+- blobpacked
+- docker use
+- HTTP/2
+- deploy on GCE
+- misc: faster image resizing, timezone handling, creation time sorting, better sync, better reindexing, relation searches, describe rules...
+
+* Importers
+
+- schema cleanup
+- automatic periodic incremental run
+- web UI goodness
+- new pinboard importer
+
+* web UI
+
+- new look: top bar, piggy menu, contextual slider on right, aspects
+- permanode deletion
+- permanode aspect with attributes editor
+- blobRef based URLs
+- mass tagging
+- status page (with restart)
+- rendering for videos, tweets, checkins...
+- more search criterion
+- better layout on mobile
+- QR code page for mobile configuration
+- debug console
+
+* web UI: main page
+
+.image camli-webui-1pudgymenu.png
+
+* web UI: query
+
+.image camli-webui-2tagquery.png
+
+* web UI: container contents
+
+.image camli-webui-3container-contents.png
+
+* web UI: container permanode
+
+.image camli-webui-4container-permanode.png
+
+* web UI: container blob
+
+.image camli-webui-5container-blob.png
+
+* web UI: contextual menu
+
+.image camli-webui-6contextmenu.png
+
+* web UI: image
+
+.image camli-webui-7image.png
+
+* web UI: status
+
+.image camli-webui-8status.png
+
+* Tools
+	
+camtool:
+
+- discovery
+- search
+- claims --attr
+- googinit
+- makestatic
+- searchnames
+- packblobs
+
+* Tools
+
+camput:
+
+- share --search
+- blobdir
+
+* Blobpacked
+
+- blobserver implementation
+- efficient logical layer on top of "basic" blobserver
+- less seeking, faster reads
+- small blobs logically (~same file) rearranged together in a large (16 MB) blob (== zip file)
+- frequently accessed blobs in a "loose" storage
+- dedicated index keeps track of it all, but manifest in zip enables to rebuild
+- BlobStreamer interface to use it efficiently
+- camtool packblobs
+
+* Docker
+
+- all our DB dependent tests in docker
+- -> no need to have a dozen of DB engines configured on your laptop
+- integration tests
+- build android
+- build release
+- camlistored image
+- -> use CoreOS on GCE
+
+* HTTP/2
+
+- enabled in Camlistore
+- cf Brad's talk :-)
+
+* Google Cloud Engine/Storage deployer
+
+Demo time!
+
+[[http://camlistore.org/launch]]
+
+* Questions?
+
