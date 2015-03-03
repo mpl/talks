@@ -1,0 +1,1098 @@
+A Go project: Camlistore
+23 March 2015
+Tags: go, camlistore
+
+Mathieu Lonjaret
+mathieu.lonjaret@gmail.com
+@lejatorn
+
+http://golang.org
+http://camlistore.org
+
+* Disclaimer
+
+- Not a CS guy, from (astro)physics. 
+- Also worked as a sysadmin.
+- Don't know the fancy theories, just like to get things done.
+- Probably part of why I love Go.
+
+* Some History
+
+- Go created at Google in late 2007 and publicly launched in nov 2009 (BSD-style license).
+- Basic problem: C++ compilations take ages, even on google farms.
+- Initial creators fed up and started design of Go "in between compiles".
+
+* Initially
+
+- Ken Thompson: Unix, Plan 9, regexps, UTF-8...
+- Rob Pike: Plan 9, Limbo, Acme, UTF-8...
+- Robert Griesemer: Javascript V8, Java Hotspot, Strongtalk (Smalltalk)...
+
+* Later
+
+- Ian Lance Taylor: binutils (gold linker), GCC, gccgo...
+- Russ Cox: Plan9(port), re2...
+- Brad Fitzpatrick: livejournal, memcached, openid...
+- ~600 contributors, notably from Google, Canonical, Dropbox, Facebook, Github, Mozilla, Tumblr... + many individuals.
+See [[https://github.com/golang/go/wiki/GoUsers]]
+
+* Problems
+
+- slow builds
+- uncontrolled dependencies
+- each programmer using a different subset of the language
+- poor program understanding (code hard to read, poorly documented, and so on)
+- duplication of effort
+- cost of updates
+- version skew
+- difficulty of writing automatic tools
+- cross-language builds
+
+* Solution
+
+Go is a compiled, concurrent, garbage-collected, statically typed lang.
+
+#.play hello.go
+	package main
+	
+	import "fmt"
+	
+	func main() {
+		fmt.Println("Hello World")
+	}
+
+
+* Specification
+	
+- short (~45 pages when printing from my browser)
+- simple. ex: only 25 keywords
+
+Easy to often come back to.
+
+When in doubt, just go read it:
+
+[[http://golang.org/ref/spec]]
+
+* Dependencies: anecdote.
+
+"The construction of a single C++ binary at Google can open and read hundreds of individual header files tens of thousands of times. In 2007, build engineers at Google instrumented the compilation of a major Google binary. The file contained about two thousand files that, if simply concatenated together, totaled 4.2 megabytes. By the time the #includes had been expanded, over 8 gigabytes were being delivered to the input of the compiler, a blow-up of 2000 bytes for every C++ source byte." - Rob Pike
+
+* Dependencies: packages.
+
+	import "encoding/json"
+
+or
+
+	import (
+		"bufio" // from std library
+		"encoding/json" // from std library
+		
+		"mycompany/mypkg" // private company pkg
+
+		"camlistore.org/pkg/client" // public pkg
+	)
+
+- std lib pkgs live in *GOROOT*, ex: $HOME/go
+- everything else in *GOPATH*, ex: $HOME/gocode (some ppl just use $HOME)
+- download with go get (more about go tools later), git, hg...
+
+* Packages organization
+
+	GOROOT/
+		src/
+			encoding/
+				json/
+			...
+		pkg/
+		bin/
+
+	GOPATH/
+		src/
+			camlistore.org/
+			github.com/
+			...
+		pkg/
+		bin/
+
+- Each .go file belongs to a package
+- pkg name is global identifier
+- pkg name *main* is convention for executable
+- convention for tests is *_test.go
+
+* Dependencies, the Go way
+
+- unused dependency ==  compile error
+- no circular imports
+- 1 import clause == 1 file opened
+
+Main reason why Go compilations are faster than C or C++ compilations.
+
+* Dependencies: 1 import clause == 1 file opened
+
+Example:
+
+- package A imports package B
+- package B imports package C
+- package A does not import package C
+
+Compilation:
+
+- C is compiled.
+- B is compiled: the generated object file starts with type information for all dependencies of B that affect the public interface of B.
+- A is compiled: opens B and finds everything it needs (and compiler can stop reading and close file as soon as all export data is read).
+
+* Basic toolchain
+
+- go get
+- go build
+- go install
+- go run
+- go test
+- gofmt
+- many others (later)
+
+* Example time
+
+* Language types
+
+- bool
+- usual numeric types: uint, int, string, float64... but numeric types are distinct and require conversion (e.g. int vs int32 vs int64)
+- string (immutable)
+- array (const length)
+- slice: "dynamic array", with length and capacity.
+- map
+- struct
+- pointer
+- interface
+- chan
+- const
+
+* Language types
+
+In this talk:
+
+- review of those types
+- relevant interludes about the lang
+
+* Array vs slice
+
+	var a [3]int // fixed length of 3
+	a[1] = 7
+
+vs
+
+	var b []int // unallocated
+	b = make([]int, 4) // b is now "pointer" to new array of length 4
+
+	var c, d []int
+	c = a[1:3] // slicing array a
+	d = b[0:2] // slicing slice b
+
+	// slices can also grow "automatically"
+	c = append(c, 9) // c is now: [7 0 9]
+
+Slices have a length (*len(s)*), but also a capacity (*cap(s)*).
+
+See the [[http://golang.org/ref/spec#Slice_types][spec]], as well as:
+- [[http://golang.org/doc/effective_go.html#slices]]
+- [[https://code.google.com/p/go-wiki/wiki/SliceTricks]]
+- [[http://research.swtch.com/godata]]
+
+* Short variable declaration
+
+	var foo int
+	foo = 7
+
+equivalent
+
+	foo := 7 // Only place not allowed: top-level scope.
+
+Subtlety with redeclaration, more later.
+	
+* Map: no surprise
+
+	var m map[string]int // uninitialized, nil. can't add elements.
+	m = make(map[string]int)
+	m["march"] = 3
+
+	foo := make(map[string]int, 7)
+	foo["april"] = 4
+
+ 	delete(foo, "april")
+
+Key type must be comparable.
+
+* New type
+
+	type myTypeName myDef
+
+ex:
+
+	type myFancyString string
+	var foo myFancyString
+	foo = "a fancy string"
+
+* Struct: the building block
+
+	type myStruct struct {
+		n int
+		s string
+		b []byte
+	}
+
+	var	ms myStruct
+	ms.s = "mystring"
+	ms.n = 7
+	
+* Composite literal
+
+	var a [3]int
+	a = [3]int{2, 4, 56}
+
+	b := []string{"hello", "grenoble"}
+
+	foo := map[string]int{"march": 3, "april": 4}
+
+	ms := myStruct {
+		n: 7,
+		s: "mystring",
+		b: []byte{1, 3, 5},
+	}
+
+* Pointers: like in C, but safer
+
+- C-like syntax: dereference with *foo, get address with &foo
+- initialize with new()
+- automatic dereference
+	foo := &myStruct{
+		myInt: 2,
+		myString: "hello",
+	} // foo is a struct pointer
+	bar := (*foo).myInt // valid, but not necessary
+	baz := foo.myInt // equivalent and simpler
+- no pointer arithmetics
+- allows to modify things in other scopes (funcs) since Go is also "pass by value"
+- also for interfaces implementations (later)
+- more with unsafe package
+
+* Func: a first class citizen
+
+	func hello(foo int, bar, baz string) (string, error) {
+		...
+		return "hello", nil
+	}
+
+- params passed and returned by value
+- multiple return values possible
+- param type optional if same as previous
+- return parenthesis optional if only one value
+- variadic parameters possible
+- closures
+
+* Variable scope and package visibility
+
+Go is lexically scoped by blocks
+
+- top-level (outside of any function) == package scoped
+- imported package name == file scoped
+- everything else is pretty much scoped by {}
+
+Visibility:
+
+- an identifier is implicitly exported if upper case for first character
+- all public identifiers should be documented
+
+* Scope and visibility: example
+
+	package mypkg
+	
+	import "somepkg" // "somepkg" only known in current file
+
+	var (
+		whatever bool = true // known in all files of mypkg
+		Debug bool // accessible from anywhere else as mypkg.Debug, with import mypkg
+	)
+
+	// This is the doc for Foo, that will automatically show with godoc, since Foo is exported.
+	func Foo(other bool) { // Foo is callable from anywhere as mypkg.Foo, with import mypkg
+		var a, b int
+		if whatever {
+			a = somepkg.Bar // a from above is in scope here
+		}
+		if other {
+			var b string // outer b is in scope, but this b takes priority over outer one.
+			b = "hello"
+			println(b)
+		}
+		b++ // b from if above isn't visible here.
+	}
+	// a and b don't exist here.
+
+* Method
+
+Like a func, but with a *receiver*.
+
+	type myStruct struct {
+		foo int
+		bar string
+	}
+	
+	func (s myStruct) print() error {
+		if foo == 0 && bar == "" {
+			return errors.New("not initialized")
+		}
+		if s.foo > 0 {
+			println(s.foo)
+			return nil
+		}
+		println(s.bar)
+		return nil
+	}
+
+* Error handling
+
+Common rookie mistake is to ignore errors, youv'e been warned.
+
+	if err := s.print(); err != nil {
+		// return early
+		return err // or log.Fatal(err) if top-level, or something else
+	}
+	// otherwise go on
+
+Often with multiple return values
+
+	n, err := ioutil.ReadFile(name)
+	if err != nil {
+		return fmt.Errorf("could not read from %v: %v", name, err)
+	}
+
+Which can be still skipped
+
+	if _, err := io.Copy(dest, src); err != nil { // n, err := io.Copy , but we ignore n
+		return fmt.Errorf("copy failed: %v", err)
+	}
+
+* Common with errors: redeclaration and shadowing
+
+Redeclaration rules: same block, and at least one var must be new.
+
+	var err error
+	n, err := foo() // n is a new var, but err is same var as above with new value.
+
+Classic consequence/mistake: shadowing
+
+	var err error
+	if something {
+		err = bar(5)
+	} else {
+		n, err := foo() // NOT a redeclaration, because new/different block.
+		if err != nil { 
+			return err
+		}
+		err = bar(n) // So this err only exists in this if-else scope
+	}
+	if err != nil {
+		return err 
+	}
+	// FAIL to detect whether bar() in else errored
+
+* Shadowing fixed
+
+	var err error
+	if something {
+		err = bar(5)
+	} else {
+		var n int
+		n, err = foo() // now err is the same as in upper scope
+		if err != nil { 
+			return err
+		}
+		err = bar(n)
+	}
+	if err != nil {
+		return err 
+	}
+
+	
+* Further reading on errors
+
+Common complaint:
+
+"I'm too lazy to systematically write:"
+
+	if err != nil {
+		// do something
+	}
+
+When you get to this point, please read:
+
+[[http://blog.golang.org/errors-are-values]]
+
+Just read it anyway.
+
+* Defer
+
+Lets you delay execution of code to the moment the function returns, in reverse order of defer calls.
+
+	func foo() {
+		defer println("After after end of foo")
+		defer println("After end of foo")
+		...
+		println("End of foo")
+	}
+
+Often used with closures.
+
+	func bar() (err error) {
+		defer func() {
+			if err != nil {
+				// recover something 
+			}
+		}()
+		...
+	}
+
+* Defer
+
+	var (
+		// fooMu guards foo (and following ones)
+		fooMu sync.Mutex
+		foo string
+
+		bar int // not guarded by fooMu
+	)
+
+Unlocking at every return is not only annoying, it's error-prone (e.g. you forget one).
+
+	func setFoo(s string) {
+		fooMu.Lock()
+		if s == "badvalue" {
+			foo = ""
+			fooMu.Unlock() // once
+			return
+		}
+		foo = s 
+		fooMu.Unlock() // twice
+	}
+
+* Defer
+	
+	func setFoo(s string) {
+		fooMu.Lock()
+		defer fooMu.Unlock()
+		if s == "badvalue" {
+			foo = ""
+			return // good guy defer got my back
+		}
+		if s == "someOtherValue" {
+			return // and again
+		}
+		foo = s
+		// and finally again
+	}
+
+Watch out for contention though (not to lock for "too long")
+-> keep your func especially concise when using defer. 
+
+* Defer, not always
+
+	func readDir(dir *os.File) error {
+		files, err := os.Readdirnames(-1)
+		if err != nil {
+			return err
+		}
+		for _,v := range files {
+			f, err := os.Open(v)
+			if err != nil {
+				return err
+			}
+			defer f.Close() // func (f *os.File) Close() error
+			// Do something with f
+		}
+		return nil
+	}
+
+Problems?
+
+- if lots of files in dir, run out of file handlers before end of loop (os.Open fails)
+- if Do something is a write, f.Close might fail, we ignored a potential error
+
+* Chan
+
+Allows communication between concurrent functions.
+"Do not communicate by sharing memory; instead, share memory by communicating."
+
+	var c chan int // nil, blocks forever.
+	c = make(chan int) // unbuffered: only receives when other side is sending and vice-versa.
+	c = make(chan int, 10) // buffered
+
+	i = <- c // i is being assigned an int by receiving from c
+	c <- j // meanwhile, in another concurrent func, j is sending its value to c.
+
+	close(c)
+
+Subtle, but important, properties:
+
+- a nil chan always blocks (both ways)
+- closed chan: receive ok, gives zero value, but send is a panic.
+
+* Concurrency: goroutine
+
+- *Go* keyword
+- called as an independent concurrent thread of control, within the same address space
+- cheap (a few KB)
+- no individual distinction: fire and wait for them all
+- no worries about blocking reads (vs Plan 9 coroutines)
+- often used in conjunction with closures.
+
+Ex:
+
+	go http.ListenAndServe(":8080", nil) // start http server in background
+	http.ListenAndServeTLS(":8081", cert, key, nil) // block on https server
+
+* Goroutine with closure
+
+	c := make(chan int, 10)
+	errc := make(chan err)
+	go func() {
+		// func myEnumeration(c chan int, limit int) error. It closes c when done.
+		errc <- myEnumeration(c, 100)
+	}()
+	for _,v := range c {
+		treatItem(v)
+	}
+	if err := <- errc; err != nil {
+		return err
+	}
+
+* Goroutine vs coroutine
+
+Like Plan 9 C coroutines, goroutines are mulitplexed onto threads. Unlike on Plan 9, when a goroutine blocks, such as by calling a blocking system call, the run-time automatically moves other goroutines on the same operating system thread to a different, runnable thread so they won't be blocked.
+
+* Goroutine: classic range gotcha
+
+	for _, v := range []int{1,2,3} {
+		go func() {
+			println(v)
+		}()
+	}
+
+What do you expect?
+
+* Goroutine: classic range gotcha
+
+Answer: who knows? (probably not 1 2 3, and most likely 3 3 3).
+
+Reason: v is reused by range, not a new var at each iteration.
+
+For intended behavior:
+
+	for _, v := range []int{1,2,3} {
+		v := v
+		go func() {
+			println(v)
+		}()
+	}
+
+Or:
+
+	for _, v := range []int{1,2,3} {
+		go func(u int) {
+			println(u)
+		}(v)
+	}
+
+* Concurrency: select
+
+Like a switch, but for communication operations.
+
+No default case; block until one communication can proceed:
+
+	c1 := make(chan int)
+	c2 := make(chan int)
+	go computeFoo(c1)
+	go computeBar(c2)
+	select {
+	case foo := <- c1:
+		fmt.Printf("foo was computed first: %v", foo)
+	case bar := <- c2:
+		fmt.Printf("bar was computed first: %v", bar)
+	}
+
+* Concurrency: select with default
+
+If default, and no other case is ready, run default:
+
+	c1 := make(chan int)
+	c2 := make(chan int)
+	go computeFoo(c1)
+	go computeBar(c2)
+	for {
+		select {
+		case foo := <- c1:
+			fmt.Printf("foo was computed first: %v", foo)
+			return
+		case bar := <- c2:
+			fmt.Printf("bar was computed first: %v", bar)
+			return
+		default:
+			println("tick")
+			time.Sleep(time.Second)
+		}
+	}
+
+* Concurrency: select with time out
+
+Classic time-out idiom, with time.After:
+
+	c1 := make(chan int)
+	go computeFoo(c1)
+	select {
+	case foo := <- c1:
+		fmt.Printf("foo was computed: %v", foo)
+	case <-time.After(5 * time.Minute):
+		println("timed out")
+	}
+
+* Concurrency: waitgroup
+
+	var wg sync.WaitGroup
+	var urls = []string{
+		"http://www.golang.org/",
+		"http://www.google.com/",
+		"http://www.somestupidname.com/",
+	}
+	for _, url := range urls {
+		// Increment the WaitGroup counter.
+		wg.Add(1)
+		// Launch a goroutine to fetch the URL.
+		go func(url string) {
+			defer wg.Done() // Decrement the counter when the goroutine completes.
+			http.Get(url) // Fetch the URL.
+		}(url)
+	}
+	// Wait for all HTTP fetches to complete.
+	wg.Wait()
+
+* Const
+
+No mix of numeric types with vars. (signedness is tricky). But:
+
+	foo := 1e6 * time.Second * -1 // is OK, because rhs is a const.
+
+Const can be untyped, with a default type inferred from their syntax:
+
+	const bar = 7 // untyped numeric const, with default int type
+	i := bar // Ok, i automatically an int thanks to default type of bar
+	var uint j = bar // Ok too, because bar is untyped
+
+Const can also be typed, when default type is not the one we want:
+
+	const baz uint = 9
+	k := baz // Ok
+	var l uint32 = baz // NOT OK, conversion needed.
+	var l uint32 = uint32(baz) // Ok
+
+	// arbitrary precision, allows for better precision calculations, until var assignment.
+	Pi    = 3.14159265358979323846264338327950288419716939937510582097494459
+
+[[http://blog.golang.org/constants]]
+
+* Interface
+
+- O.O.P. through composition (no type hierarchy)
+- implicit by implementation
+- an interface is just a set of methods, that define behaviour(s)
+
+Definition:
+
+	type anInterface interface {
+		Method1() error
+		Method2(foo int) string
+	}
+
+One possible implementation:
+
+	func (yt yourType) Method1() error {
+		return nil
+	}
+
+	func (yt yourType) Method2(foo int) string {
+		return ""
+	}
+
+* Interface: error example
+
+	// Defined in stdlib
+	type error interface {
+		Error() string
+	}
+
+Classic error "generation":
+
+	func foo() error {
+		if somethingHappened() {
+			return errors.New("something happened")
+		}
+		if err := somethingElse(); err != nil {
+			return fmt.Errorf("something else: %v", err)
+		}
+		...
+		return nil
+	}
+
+* Interface: error implementation
+
+	type projectIDError struct {
+		id    int
+		cause string
+	}
+
+	func (e *projectIDError) Error() string {
+		if e.id == 0 {
+			panic("projectIDError without an id")
+		}
+		if e.cause != "" {
+			return fmt.Sprintf("project ID error for %v: %v", e.id, e.cause)
+		}
+		return fmt.Sprintf("project ID error for %v", e.id)
+	}
+
+* Interface: error implementation
+
+Since _*projectIDError_ implements the error interface, it can now be used anywhere we want an error:
+
+	func foo() error {
+		if somethingHappened() {
+			return errors.New("something happened")
+		}
+		if err := somethingElse(); err != nil {
+			return fmt.Errorf("something else: %v", err)
+		}
+		if projectWentWrong() {
+			return &projectIDError{
+				id: 7,
+				cause: "the power plant exploded",
+			}
+		}
+		return nil
+	}
+
+* Interface: embedding
+
+	type BlobReceiver interface {
+		ReceiveBlob(br blob.Ref, source io.Reader) (blob.SizedRef, error)
+	}
+
+	type BlobStatter interface {
+		StatBlobs(dest chan<- blob.SizedRef, blobs []blob.Ref) error
+	}
+
+	type StatReceiver interface {
+		BlobReceiver
+		BlobStatter
+	}
+
+* Interface: embedding
+
+	type memBlobServer struct {
+		storage []byte
+	}
+
+	func (bs *memBlobServer) ReceiveBlob(br blob.Ref, source io.Reader) error {
+		var sbr blob.SizedRef
+		contents, err := ioutil.Readall(source)
+		if err != nil {
+			return sbr, err
+		}
+		toStore := br.String() + ":" string(contents) + ","
+		bs.storage = append(bs.storage, []byte(toStore)...)
+		return nil
+	}
+
+	func (bs *memBlobServer) StatBlobs(dest chan<- blob.SizedRef, blobs []blob.Ref) error {
+		// implementation 
+	}
+
+type memBlobServer can now be used anywhere that requires a BlobReceiver, or BlobStatter, or StatReceiver.
+
+* Type casting
+
+	type error interface { // error definition from stdlib
+		Error() string
+	}
+
+example:
+
+	err := SomeFunc()
+	if pe, ok := err.(*os.PathError); !ok {
+		println("not a path error")
+	}
+
+type switch:
+
+	switch e := err.(type) { // "e :=" optional
+	case *os.PathError:
+		// do something with e
+	case *os.SyscallError:
+		fmt.Printf("syscall error: %v", e)
+	default:
+		println("another error implementation")
+	}
+
+* Not to confuse with: type conversion
+
+Since Go is strongly typed, conversions are necessary between all the variously sized numerical values (e.g. float64 vs float32).
+
+Common cases:
+
+	float32(2.718281828) // from a const
+	int(float32(3.4)) // float to int, rounding.
+	uint32(int8(5))
+
+Also common between "character" types:
+
+	foo := []byte("hello") // from a const string
+	bar := string(foo) // []byte to string
+	string('a') // 'a' is actually a byte (numeric type), alias uint8
+
+See [[http://golang.org/ref/spec#Conversions]] for the exact rules.
+
+* Interface subtleties
+
+_Receiver_type_
+
+- The method set of a pointer type *T is the union of all the methods declared with receiver type T or *T.
+- The method set of any type T consists of all methods declared with receiver type T.
+
+_Nil_interface_
+
+- Under the covers of an interface.
+
+* Interface subtleties: receiver type
+
+	type Person struct {
+		// ...
+	}
+
+On *T:
+
+	func (p *Person) String() string {
+		...
+	}
+
+Or on T:
+
+	func (p Person) String() string {
+		...
+	}
+
+Both OK to use on *T:
+
+	func main() {
+		p := &Person{}
+		fmt.Println(p) // Ok with either of the above implementations.
+	}
+
+* Interface subtleties: receiver type
+
+	func main() {
+		p := Person{}
+		fmt.Println(p)
+	}
+
+Only OK if:
+
+	func (p Person) String() string {
+		...
+	}
+
+Reason: not always possible to find address of something.
+
+* Interface subtleties: to nil or not to nil?
+
+	var s fmt.Stringer
+	fmt.Println(s, s == nil)
+
+->
+
+	% <nil>, true
+
+* Interface subtleties: to nil or not to nil?
+
+	var p *Person
+	var s fmt.Stringer = p
+	
+	fmt.Println(s, p == nil)
+	fmt.Println(s, s == nil)
+
+->
+
+	% <nil>, true
+	% <nil>, false
+
+Why?
+
+* Interface subtleties: to nil or not to nil?
+
+Interface is actually _(type,_value)_
+
+So
+
+	(nil, nil) == nil
+
+But
+
+	(*Person, nil) != nil
+
+* Interface subtleties: to nil or not to nil?
+
+Remember?
+
+	func returnsAnError() error {
+		if projectWentWrong() {
+			return &projectIDError{
+				id: 7,
+				cause: "the power plant exploded",
+			}
+		}
+		return nil
+	}
+
+* Interface subtleties: to nil or not to nil?
+
+	func returnsAnError() error {
+		var errProj *projectIDError // errProj == nil
+		if projectWentWrong() {
+			errProj = &projectIDError{
+				id: 7,
+				cause: "the power plant exploded",
+			}
+		}
+		return errProj
+	}
+
+	FAIL because always returns interface (*projectIDError, something) != nil
+
+* Tests
+
+- *go* *test* [pkgname|path]
+- By convention any *_test.go file contains tests
+- func TestSomething(t *testing.T)
+- import "testing" for T.Fatalf, T.Errof ...
+- test file can be:
+- ... within foo pkg it tests (easier because has access to everything), usual way.
+- ... in its own foo_test pkg to refactor common code (or to avoid circular dependencies). Use "export_test.go" convention to access private stuff from foo. Example in net/http.
+- go test -run _pattern_ # to run selectively
+- race detector (not just for tests) with -race:
+[[http://blog.golang.org/race-detector]]
+
+* Cross Compilation: a trivial matter
+
+Prepare your env:
+
+	cd $GOROOT/src; ./all.bash # Build Go once for your platform, as usual
+	GOOS=windows GOARCH=amd64 ./make.bash --no-clean # Build Go support for e.g. windows
+
+Build foo.go for windows:
+
+	GOOS=windows go build -o foo foo.go
+
+Deploy:
+
+	scp foo wherever:.
+
+First step won't even be needed in Go 1.5.
+
+Did I mention that go binaries are (usually) statically linked?
+
+* Execution modes
+
+As of now, Go supports:
+
+- statically linked. If does not use *net* or *os/user* packages.
+- dynamically linked with libc because of DNS and user name lookup.
+- dynamically linked with C or C++ code, with:
+- ... *cgo* for C: [[http://golang.org/cmd/cgo/]]
+- ... *SWIG* for C++: [[http://www.swig.org/Doc3.0/Go.html]]
+-> examples: *sqlite* or *gtk* bindings.
+
+Note that cgo or SWIG are called automatically by the go tool (go build) upon certain conventions.
+
+(Far) future plans for dynamic loading (plugins, go shared libraries ...):
+[[https://docs.google.com/document/d/1nr-TQHw_er6GOQRsF6T43GGhFDelrAP0NqSS_00RgZQ][Go execution modes doc]]
+
+* Build constraints (a.k.a tags)
+
+Syntax:
+
+	// +build constraints
+
+Always at top of file (blank lines above allowed).
+
+Ex:
+
+	// +build linux,386 darwin,!cgo
+
+means only if
+_(linux_ _AND_ _386)_ _OR_ _(darwin_ _AND_ _(NOT_ _cgo))_
+will the file be included in the build.
+
+See [[http://golang.org/pkg/go/build/]] for more.
+
+* gccgo
+
+- Another implementation of a compiler for Go.
+- Keeps compiler devs honest about the Go lang spec.
+- Go 1 included in GCC starting at 4.7.1.
+- Very very roughly:
+gc better on finer Go details, especially regarding concurrency, and compiles faster, but gccgo benefits from gcc optimizations, so CPU bound code might run faster.
+
+See [[https://golang.org/doc/install/gccgo]]
+
+* More tools
+
+- go vet: analyses your code and finds common mistakes.
+- go tool cover: analyses test coverage of your code.
+- go fix: automatically fixes your code (following a set of rules) after a language change.
+- [[https://golang.org/x/tools/cmd/benchcmp][benchcmp]]: for benchmarks.
+- [[https://github.com/nsf/gocode][gocode]]: for autocompletion.
+- [[https://golang.org/x/tools/cmd/goimports][goimports]]: manages your imports.
+- [[https://golang.org/x/tools/cmd/oracle][oracle]]: advanced source code analysis.
+- ...
+
+[[http://dominik.honnef.co/posts/2014/12/an_incomplete_list_of_go_tools]]
+
+* Evolution: pre-Go 1
+
+- weekly releases
+- spec still moving
+- no stability promise, packages very much still in flux
+- but code usually fixed easily with gofix
+
+* Go 1
+
+- spec set in stone until Go 2 -> *stability* promise: [[https://golang.org/doc/go1compat]]
+- still many changes wrt previous RCs: [[https://golang.org/doc/go1]]
+- introduces *go* tool. Before that:
+- ...subcommands were separate commands: gobuild, goinstall...
+- ...there was no GOPATH system, so Makefiles were commonly used.
+- packaged releases. (especially matters for windows users).
+
+-> Fun *community* facts:
+
+- most of the windows porting work was done by community (Alex Brainman) 
+- unexpected strong adoption from python/ruby users. (intended primary audience was C++ people).
+
+* Go 1.1 - Go 1.5:
+
+- [[https://golang.org/doc/go1.1][Go 1.1]]: performance. introduced race detector.
+- [[https://golang.org/doc/go1.2][Go 1.2]]: shorter release cycle (1 year -> 6 months). Better scheduler. 3 index slices. (foo[i:j:k]).
+- [[https://golang.org/doc/go1.2][Go 1.3]]: more archs/systems. precise Garbage Collector -> faster builds, better perfs too. parts of the linker (C) moved as a (Go) compiler lib.
+- [[https://golang.org/doc/go1.2][Go 1.4]]: keep on moving runtime (from C) to Go, mainly to improve GC. go generate. ARM/Android support.
+- [[https://golang.org/doc/go1.2][Go 1.5]]: Planned for june 2015. Goals: everything in Go, fully concurrent GC. More ports.
+
+[[https://docs.google.com/document/d/1P3BLR31VA8cvLJLfMibSuTdwTuF7WWLux71CYD0eeD8][Go 1.3+ Compiler Overhaul]]
+[[https://docs.google.com/document/d/16Y4IsnNRCN43Mx0NZc5YXZLovrHvvLhK_h0KN8woTO4][Go 1.4+ GC Plan and Roadmap]]
+
+* Camlistore part starts here
