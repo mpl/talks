@@ -1504,7 +1504,7 @@ See [[https://golang.org/doc/install/gccgo]]
 * Docker
 
 - indexer tests: no need to have all the DBMs installed anymore, just run test in MySQL image container.
-- integration test: test more honest test if in container, because no setup assumption
+- integration test: test more honest if in container, because no setup assumption
 - android build
 - camlistored image, for easy deployment on cloud platforms (Google Compute Engine) with CoreOS
 - easier automatic multi-platform binaries builds
