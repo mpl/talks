@@ -164,11 +164,11 @@ When in doubt, just go read it:
 
 [[http://golang.org/ref/spec]]
 
-* Dependencies: anecdote.
+* Dependencies: anecdote
 
 "The construction of a single C++ binary at Google can open and read hundreds of individual header files tens of thousands of times. In 2007, build engineers at Google instrumented the compilation of a major Google binary. The file contained about two thousand files that, if simply concatenated together, totaled 4.2 megabytes. By the time the #includes had been expanded, over 8 gigabytes were being delivered to the input of the compiler, a blow-up of 2000 bytes for every C++ source byte." - Rob Pike
 
-* Dependencies: packages.
+* Dependencies: packages
 
 	import "encoding/json"
 
@@ -187,7 +187,7 @@ or
 - everything else in *GOPATH*, ex: $HOME/gocode (some ppl just use $HOME)
 - download with *go* *get* (more about go tools later), git, hg...
 
-* Packages organization
+* Package organization
 
 	GOROOT/
 		src/
@@ -209,6 +209,31 @@ or
 - pkg name is global identifier
 - pkg name *main* is convention for executable
 - convention for tests is *_test.go
+
+* Camlistore packages
+
+	AUTHORS
+	...
+	cmd
+		camdeploy
+		camget
+		...
+		camtool
+	...
+	pkg
+		app
+		auth
+		blob
+		blobserver
+		...
+		types
+		webserver
+		wkfs
+	server
+		appengine
+		camlistored
+		...
+	...
 
 * Dependencies, the Go way
 
