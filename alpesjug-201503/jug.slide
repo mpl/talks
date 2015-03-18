@@ -116,7 +116,7 @@ No more sword-fights :(
 * Initially
 
 - Ken Thompson: Unix, Plan 9, regexps, UTF-8...
-- Rob Pike: Plan 9, Limbo, Acme, UTF-8...
+- Rob Pike: Plan 9, Newsqueak, Limbo, Acme, UTF-8...
 - Robert Griesemer: Javascript V8, Java Hotspot, Strongtalk (Smalltalk)...
 
 * Later
@@ -156,13 +156,14 @@ Go is a compiled, concurrent, garbage-collected, statically typed lang.
 * Specification
 	
 - short (~45 pages when printing from my browser)
-- simple. ex: only 25 keywords
+- simple. ex: only 25 keywords (vs 50 for Java I think?)
 
 Easy to often come back to.
 
 When in doubt, just go read it:
 
 [[http://golang.org/ref/spec]]
+# $GOROOT/doc/go_spec.html
 
 * Dependencies: anecdote
 
@@ -270,19 +271,17 @@ Remember?
 * Blob server
 
 - "Blob": small (0B - 16MB) chunk of data. No metadata.
-- Go Interfaces: Fetch, ReceiveBlob, StatBlobs, EnumerateBlobs, RemoveBlobs (more on interfaces later)
+- Content-Addressable: use hash of blob (a.k.a. blobRef), sha1 for now.
+- Operations: Fetch, ReceiveBlob, StatBlobs, EnumerateBlobs, RemoveBlobs ( == Go interfaces, more later).
 - HTTP interface: {GET,PUT,HEAD} /sha1-xxxxxxx HTTP/1.1
 - advantages: easy sync, no merge logic, integrity checking, de-depuping...
 - implement anywhere: memory, local disk, S3, Google Drive, Google Cloud Storage...
 
 * Schema
 
-- blobs are immutable
-- but your data is mutable, so:
-- just use a specific blob as a reference, an anchor: a *permanode*
-- mutation (key/values) == a *claim* (again, just a blob) targeting this permanode
-- all the claims on this permanode == current state of your data
-- everything GPG-signed
+- model itself is stored as ... blobs of course
+- encoded as JSON schema, with *"camliType"* for:
+- bytes, file, directory, fifo, inode, socket, symlink, static-set...
 
 * Schema example: file
 
@@ -303,6 +302,15 @@ Remember?
 		"unixOwnerId": 1000,
 		"unixPermission": "0664"
 	}
+
+* Schema, mutations
+
+- blobs are immutable
+- but your data is not, so:
+- just use a specific blob as a reference, an anchor: a *permanode*
+- mutation (key/values) == a *claim* (again, just a blob) targeting this permanode
+- all the claims on this permanode == current state of your data
+- everything GPG-signed
 
 * Schema example: permanode
 
@@ -350,7 +358,8 @@ Remember?
 
 - index with sorted.KeyValue: Get, Set, Find (iterator)
 - implement sorted interface anywhere: MySQL, SQLite, Postgres, Mongo, LevelDB, cznic/kv...
-- search with high-level queries and describe requests, with HTTP API for clients
+- low-level structured search (nested tree of operators, fields, set unions/intersections, etc)
+- high-level queries and describe requests, with HTTP API for clients
 
 * But wait, there's more!
 
@@ -384,7 +393,7 @@ And yet Camlistore (or its imported 3rd parties) implements/uses:
 A handful of regular contributors, and Go is only 5 years old.
 (One of these contributors is really not like the others, sure).
 
--> _One_ _tries_ _Go_ _because_ _it_ *looks* _simple_, _then_ _stays_ _with_ _it_ _because_ _it_ *is* _simple_ (_and_ _efficient_).
+-> _One_ _tries_ _Go_ _because_ _it_ _looks_ *easy*, _then_ _stays_ _with_ _it_ _because_ _it_ _is_ *simple*, _which_ _is_ _key_ _to_ _efficiency_.
 
 * Why Go: simplicity
 
@@ -950,11 +959,13 @@ _"Do_ _not_ _communicate_ _by_ _sharing_ _memory;_ _instead,_ _share_ _memory_ _
 	c = make(chan int) // unbuffered: only receives when other side is sending and vice-versa.
 	c = make(chan int, 10) // buffered
 
-	i = <- c // i is being assigned an int by receiving from c
+Example:
+
+	c <- j //  j is sending its value to c.
 
 Meanwhile, in another concurrent func:
 
-	c <- j //  j is sending its value to c.
+	i = <- c // i is being assigned an int by receiving from c
 	close(c)
 
 Subtle, but important, properties:
@@ -1064,6 +1075,10 @@ But since StatBlobs does not close dest, how do you use it? When to stop?
 	if err := <-resultch; err != nil {
 		return fmt.Errorf("Stat error: %v", err)
 	}
+
+* Do you want to know more ?
+
+[[http://blog.golang.org/concurrency-is-not-parallelism]]
 
 * Blob server: the final word
 
@@ -1560,10 +1575,8 @@ See [[http://blog.golang.org/generate]]
 
 # TODO:
 
-# - slurp refspec or already there with godoc ?
 # - slice tricks
 # - os.Exec djpeg go bug
-# - concurrent vs //
 # - backup Go and camli tree
 # - prep env for X compil
 # - android build
