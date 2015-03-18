@@ -1110,6 +1110,8 @@ This is called *interface* *embedding*, and is how you achieve *composition* in 
 
 * Go 1
 
+28 March 2012
+
 - spec set in stone until Go 2 -> *stability* promise: [[https://golang.org/doc/go1compat]]
 - still many changes wrt previous RCs: [[https://golang.org/doc/go1]]
 - introduces *go* tool. Before that:
