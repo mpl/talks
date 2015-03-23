@@ -17,6 +17,10 @@ In other words:
 
 "Camlistore is a way to store, sync, share, model and back up content"
 
+Or even simpler:
+
+_Your_ _home_ _on_ _the_ _web._
+
 See [[https://www.youtube.com/watch?v=kBCQq5hfsug][Camlistore at FOSDEM 2014]]
 See [[https://www.youtube.com/watch?v=oM-MfeflUZ8][Camlistore at FOSDEM 2015]]
 
@@ -38,7 +42,7 @@ See [[https://www.youtube.com/watch?v=oM-MfeflUZ8][Camlistore at FOSDEM 2015]]
 
 * Camlistore Goals
 
-Deploy it anywhere (own your data), stay in control
+*Deploy* it *anywhere*, own your data, stay in control.
 
 - use trusted/open protocols and standards (HTTPS, JSON...)
 - deploy at home, or rented machine in datacenter
@@ -48,22 +52,22 @@ Deploy it anywhere (own your data), stay in control
 
 * Camlistore Goals
 
-Dump all your data, regardless of type, location, etc.
+Dump *all* *your* *data*, regardless of type, location, etc.
 
 - photos, e-mails, blogs, scans, everything.
 - should work regardless of origin: copy from local filesystem, import from picasa...
 - forget about filesystem hierarchy; no need to arrange into folders to find things later.
 
--> Need good indexing/searching 
+-> Need good _indexing/searching_ 
 
 * Camlistore Goals
 
-Use it forever.
+*Use* it *forever*.
 
 - good UI/tools/clients
 - should still work in 50 years.
 
--> Need simple/robust data model/schema.
+-> Need simple/robust _data_ _model._
 
 * Components
 
@@ -73,7 +77,7 @@ Use it forever.
 - data schema
 - indexing/search
 
-Come back later
+More about it later.
 
 * Camlistore in numbers
 
@@ -84,7 +88,7 @@ Come back later
 - ~ 350 kLOC ( 2/3rd of it imported )
 - ~ 250 package names ( ~ 1/2 imported ) 
 
--> fairly large project
+-> fairly _large_ _project_
 
 * And yet
 
@@ -141,7 +145,7 @@ See [[https://github.com/golang/go/wiki/GoUsers]]
 
 * Solution
 
-Go is a compiled, concurrent, garbage-collected, statically typed lang.
+Go is a _compiled,_ _concurrent,_ _garbage-collected,_ _statically_ _typed_ language.
 
 #.play hello.go
 	package main
@@ -210,6 +214,8 @@ or
 - pkg name is global identifier
 - pkg name *main* is convention for executable
 - convention for tests is *_test.go
+
+* Package demo
 
 * Camlistore packages
 
@@ -303,9 +309,9 @@ Remember?
 		"unixPermission": "0664"
 	}
 
-* Schema, mutations
+* Schema: mutations
 
-- blobs are immutable
+- blobs are _immutable_ (since we want content-addressable)
 - but your data is not, so:
 - just use a specific blob as a reference, an anchor: a *permanode*
 - mutation (key/values) == a *claim* (again, just a blob) targeting this permanode
@@ -389,11 +395,11 @@ And yet Camlistore (or its imported 3rd parties) implements/uses:
 - lat/long coordinates to timezone mapping
 - and of course a webserver with many handlers
 
--> Many domains.
-A handful of regular contributors, and Go is only 5 years old.
+-> Many domains, rich ecosystem.
+While only handful of regular contributors, and Go is only 5 years old.
 (One of these contributors is really not like the others, sure).
 
--> _One_ _tries_ _Go_ _because_ _it_ _looks_ *easy*, _then_ _stays_ _with_ _it_ _because_ _it_ _is_ *simple*, _which_ _is_ _key_ _to_ _efficiency_.
+-> _One_ _tries_ _Go_ _because_ _it_ _looks_ *easy*, _then_ _stays_ _with_ _it_ _because_ _it_ _is_ *simple*, _which_ _is_ _key_ _to_ *efficiency*.
 
 * Why Go: simplicity
 
@@ -602,7 +608,7 @@ In Camlistore:
 
 	go run make.go -os windows
 
-*Demo*!
+* Cross-compilation demo
 
 * Cross Compilation: a trivial matter
 
@@ -661,7 +667,7 @@ let's have a look in
 
 and see how it's done.
 
-*Demo*!
+* Build tags demo
 
 * Tests
 
@@ -1040,6 +1046,8 @@ If default present, and no other case is ready, run default:
 			time.Sleep(time.Second)
 		}
 	}
+
+* Back to our BlobStatter
 
 * BlobStatter: memory
 
