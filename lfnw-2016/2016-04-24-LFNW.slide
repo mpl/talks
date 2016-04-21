@@ -1,0 +1,336 @@
+Camlistore
+24 Apr 2016
+Tags: camlistore, lfnw
+
+Brad Fitzpatrick
+@bradfitz
+brad@danga.com
+http://bradfitz.com/
+
+Mathieu Lonjaret
+mathieu.lonjaret@gmail.com
+@lejatorn
+
+http://camlistore.org/
+
+* Intros
+
+* Camlistore
+
+"Camlistore is a way to store, sync, share, model and back up content"
+
+Or simpler:
+
+_Your_ _home_ _on_ _the_ _web._
+
+* Motivation
+
+- Quit reinventing the CMS wheel for each kind of our docs
+- blogs, comments, photos, emails, backups, scanned paperwork, ...
+- is a scanned photo a scan, a photo, or a blog post? who cares.
+- write *one CMS to rule them all*
+- ... or at least a good framework for higher-level CMSes
+
+* Problems, constraints
+
+- Trust protocols, not companies
+- Store everything
+- Be in control
+- But simple, and cheap
+- And reliable, durable
+
+* Camlistore Goals
+
+*Deploy* it *anywhere*, own your data, stay in control.
+
+- use trusted/open protocols and standards (HTTPS, JSON...)
+- deploy at home, or rented machine in datacenter
+- or on @big_company's cloud (using only their infrastructure)
+- or let small business do it for you
+- and replicate anyway
+
+* Camlistore Goals
+
+Dump *all* *your* *data*, regardless of type, location, etc.
+
+- photos, e-mails, blogs, scans, everything.
+- should work regardless of origin: copy from local filesystem, import from picasa...
+- mobile devices (phone) data too
+- forget about filesystem hierarchy; no need to arrange into folders to find things later.
+
+-> Need good _indexing/searching_ 
+
+* Camlistore Goals
+
+*Use* it *forever*.
+
+- good UI/tools/clients: web UI, FUSE, CLI tools...
+- decouple tools from storage
+- should still work in 50 years.
+
+-> Need simple/robust _data_ _model._
+
+* Camlistore Goals
+
+Security.
+
+- *your* private repo, for life
+- everything private by default
+- grant access to specific objects/trees with friends or the world
+- tools let you share
+
+* Components
+
+3 major concepts:
+
+- blob server
+- data schema
+- indexing/search
+
+Hence Camlistore == Content-Addressable Multi-Level Indexed Storage
+
+* Blob server
+
+- "Blob": small (0B - 16MB) chunk of data. No metadata.
+- Content-Addressable: use hash of blob (a.k.a. blobRef), sha1 for now.
+- Operations: Fetch, ReceiveBlob, StatBlobs, EnumerateBlobs, RemoveBlobs (== Go interfaces).
+- HTTP interface: {GET,PUT,HEAD} /sha1-xxxxxxx HTTP/1.1
+- advantages: easy sync, no merge logic, integrity checking, de-depuping...
+- implement anywhere: memory, local disk, S3, Google Drive, Google Cloud Storage...
+
+* Blob size
+
+How files are cut
+
+- with rolling checksums
+- 32-bit checksum over 64 byte rolling window
+- 14 or more lower bits sets: break point
+- more bits -> stronger break
+- also: blobpacked. (later).
+
+* Blob Storage
+
+ReceiveBlob op == BlobReceiver interface:
+
+	// BlobReceiver is the interface for receiving
+	type BlobReceiver interface {
+		// ReceiveBlob accepts a newly uploaded blob and writes it to
+		// permanent storage.
+		//
+		// Implementations of BlobReceiver downstream of the HTTP
+		// server can trust that the source isn't larger than
+		// MaxBlobSize and that its digest matches the provided blob
+		// ref. (If not, the read of the source will fail before EOF)
+		//
+		// To ensure those guarantees, callers of ReceiveBlob should
+		// not call ReceiveBlob directly but instead use either
+		// blobserver.Receive or blobserver.ReceiveString, which also
+		// take care of notifying the BlobReceiver's "BlobHub"
+		// notification bus for observers.
+		ReceiveBlob(br blob.Ref, source io.Reader) (blob.SizedRef, error)
+	}
+
+* BlobReceiver
+
+Implemented by:
+
+- [[http://camlistore.org/pkg/blobserver/memory/mem.go?s=3258:3341#L126][pkg/blobserver/memory/mem.go]]
+- [[http://camlistore.org/pkg/blobserver/localdisk/receive.go?s=668:769#L20][pkg/blobserver/localdisk/receive.go]]
+- [[http://camlistore.org/pkg/blobserver/google/cloudstorage/storage.go?s=4820:4903#L161][pkg/blobserver/google/cloudstorage/storage.go]]
+- ...
+
+* BlobReceiver
+
+Any of ***memory.Storage*, ***localdisk.DiskStorage*, or ***cloudstorage.Storage* can be used anywhere a *blobserver.BlobReceiver* is wanted.
+
+For example, the func *blobserver.Receive* is defined as:
+
+	func Receive(dst BlobReceiver, br blob.Ref, src io.Reader) (blob.SizedRef, error)
+
+and is called by most of the users in the codebase when storing a blob.
+
+* Blobpacked
+
+- blobserver implementation
+- efficient logical layer on top of "basic" blobserver
+- less seeking, faster reads
+- small blobs logically (~same file) rearranged together in a large (16 MB) blob (== zip file)
+- frequently accessed blobs in a "loose" storage
+- dedicated index keeps track of it all, but manifest in zip enables to rebuild
+- BlobStreamer interface to use it efficiently
+- camtool packblobs
+
+
+* Schema
+
+- model itself is stored as ... blobs of course
+- content-adressable (more later)
+- encoded as JSON schema, with *"camliType"* for:
+- bytes, file, directory, fifo, inode, socket, symlink, static-set...
+
+* Schema example: file
+
+	{
+		"camliVersion": 1,
+		"camliType": "file",
+		"fileName": "AUTHORS",
+		"parts": [
+			{
+				"blobRef": "sha1-49cda9704fef2445f317ef12d64d5d5a1329b30e",
+				"size": 2461
+			}
+		],
+		"unixGroup": "mpl",
+		"unixGroupId": 1000,
+		"unixMtime": "2015-02-27T18:07:22.905005727Z",
+		"unixOwner": "mpl",
+		"unixOwnerId": 1000,
+		"unixPermission": "0664"
+	}
+
+* Schema: mutations
+
+- blobs are _immutable_
+- but your data is not, so:
+- just use a specific blob as a reference, an anchor: a *permanode*
+- mutation (key/values) == a *claim* (again, just a blob) targeting this permanode
+- all the claims on this permanode == current state of your data
+- everything GPG-signed
+
+* Schema example: permanode
+
+	{
+		"camliVersion": 1,
+		"camliSigner": "sha1-f2b0b7da718b97ce8c31591d8ed4645c777f3ef4",
+		"camliType": "permanode",
+		"random": "dAt77In/mxjDBAedQ5+yfnXTYRg=",
+		"camliSig":"wsBcBAABCAAQBQKIbgkACRApMaZ8JvWr2gAAYxoIAKQWl20qXkYk2xRwxmW6yKatEHJCA3IBB7DqgagjQRDLsRHI+4EpTo6Pg1xML0Mek9ffPYUzqYp8pNLQGfQ/Gh8+4jZqpGzu1MNJ8pxg2Gx+VBk0fv9XmJZGrS+iIspMyqzA3YEV8B8N0e23rnCpuSE+UAEndIfJ5R3zl4GYbvb7Vr+Oy8H8nokpdg4AyruT8/3hBG49e96sU5M5PlAnmzqeUR9UaJZawnTNlwKYtOKa1agiQ1uw2N4cb2022m3Q/AuM7ordNHvRIC+2/qFsaSc4ZKAFeE0WbnhPHyfzvcm+QbuHkJ+gMk/u9EYCcXVYdcvdDgC5tEPz9P1s7TMO4AA==SZZp"
+	}
+
+* Schema example: claim
+
+	{
+		"camliVersion": 1,
+		"attribute": "camliContent",
+		"camliSigner": "sha1-f2b0b7da718b97ce8c31591d8ed4645c777f3ef4",
+		"camliType": "claim",
+		"claimDate": "2015-03-09T16:21:05.790645264Z",
+		"claimType": "set-attribute",
+		"permaNode": "sha1-39ca840d189dc5fcc9b55ad65a6e1cd567d88336",
+		"value": "sha1-d3e250ff40afa1cb02049854eb4d795bce1b31c1",
+		"camliSig":"wsBcBAABCAAQBQKIbgkACRApMaZ8JvWr2gAAJ0EIAAlD6lbo8kRCUqmPH94X2i31Q10yJBlm+M5ASXTxqKeCPZdm9ohny1Rsc1J0R0tSZf3GpRgUq1pvMBgeybUEzoWKA5d+7a7KCSChA0D/j1iSa3ZCJnkW73iCl26iTrHy8qp/O9aBEbKsWPZ9RFTWzORMYU/gjJ8oGVTvNy/9iSSAjduGBVTZ0zRdMM5n8rcZxZ8tgMghY8KLUiXhC6y+/oGomM+Nj6/CooC4/BHa2D1Z33YfI17xKkadi6Jh/qpc49g61df6IXCNJUOat6jjipYvKAOdtxde5HvUjNg0uTxkEPXhgg6TC3lJ8r3o5BoDP4AYb98XZTZkJItLOIjwrf4==Iuvj"
+	}
+
+* Content-addressable
+
+- Immutable blob ==> forever addressable through hashsum == content-addressable
+
+Advantages:
+
+- sync any which way, no conflicts
+- (merge resolution at higher layers)
+- corruption verification/repair
+- de-duping
+
+* Schema Demo
+
+# devcam server -mini -wipe
+# devcam tool list -describe
+# devcam put file AUTHORS
+# devcam get sha1-d3e250ff40afa1cb02049854eb4d795bce1b31c1
+# devcam get sha1-49cda9704fef2445f317ef12d64d5d5a1329b30e
+# edit AUTHORS
+# devcam tool list -describe
+# devcam put permanode
+# devcam get sha1-39ca840d189dc5fcc9b55ad65a6e1cd567d88336
+# devcam put attr sha1-39ca840d189dc5fcc9b55ad65a6e1cd567d88336 camliContent sha1-d3e250ff40afa1cb02049854eb4d795bce1b31c1
+# devcam get sha1-39ca840d189dc5fcc9b55ad65a6e1cd567d88336
+# devcam tool list -describe
+# devcam get sha1-ce0bd91190a36fe5eaa83129166b11315a2bc7ce # claim
+# devcam tool describe sha1-39ca840d189dc5fcc9b55ad65a6e1cd567d88336
+# remodify AUTHORS and camliContent ?
+
+* Search
+
+- index with sorted.KeyValue interface
+- low-level structured search (nested tree of operators, fields, set unions/intersections, etc)
+- high-level queries (with constraints) and describe requests, with HTTP API for clients
+- high(er)-level expressions (for e.g. web UI), as constraints "shortcuts"
+
+* Constraint example: tag predicate
+
+"tag:pony" ==
+
+	{"constraint": {
+		"permanode": {
+			"attr":       "title",
+			"valueMatches": {
+				"contains":        "pony",
+				"caseInsensitive": true
+			}
+		}
+	}}
+
+* sorted.KeyValue
+
+- interface methods: Get, Set, Find (iterator)
+- atomically set/delete 1+ Key = Value
+- atomic commits
+- enumerate in sorted order
+- implement anywhere: MySQL, SQLite, Postgres, Mongo, LevelDB, cznic/kv...
+
+
+
+* Import / export
+
+- slurp from web services into Camlistore
+- (Flickr, LJ, Facebook, Twitter, Foursquare, etc)
+- export to whoever you want, under any API
+
+* Storing big files
+
+- rolling checksums
+- 32-bit checksum over 64 byte rolling window
+- 14 or more lower bits sets: break point
+- more bits -> stronger break
+- blobpacked (later)
+
+* FUSE
+
+- proper filesystem, not rsync hackery
+- can have TBs logically available on 100 GB laptop
+
+* Web UI
+
+- React
+- Infinite scroll
+- Lightbox
+- HTML history API
+- Search
+
+* Search
+
+- low-level structured search (nested tree of operators, fields, set unions/intersections, etc)
+- high-level one-liner expression search ("is:image -format:jpeg")
+
+* Tools
+
+- camget (blobs, trees, shares)
+- camput (blobs, files, dirs, shares, permanodes, claims)
+- camtool {init,sync,init,describe,claims,...}
+- cammount
+
+* Go does:
+
+- HTTP, HTTPS
+- JSON
+- WebSockets
+- SMTP server
+- Rolling checksums
+- Image resizing / thumbnails
+- FUSE
+- Notification bus
+- OpenPGP signing & verification
+- ....
+
+* More demos, questions
