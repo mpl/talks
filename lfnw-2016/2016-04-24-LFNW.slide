@@ -160,7 +160,6 @@ and is called by most of the users in the codebase when storing a blob.
 - BlobStreamer interface to use it efficiently
 - camtool packblobs
 
-
 * Schema
 
 - model itself is stored as ... blobs of course
@@ -263,7 +262,7 @@ Advantages:
 
 	{"constraint": {
 		"permanode": {
-			"attr":       "title",
+			"attr":       "tag",
 			"valueMatches": {
 				"contains":        "pony",
 				"caseInsensitive": true
@@ -279,58 +278,86 @@ Advantages:
 - enumerate in sorted order
 - implement anywhere: MySQL, SQLite, Postgres, Mongo, LevelDB, cznic/kv...
 
+* Clients
 
+- importers
+- web UI
+- command-line tools
+- FUSE interface
+- mobile
+- apps
 
 * Import / export
 
 - slurp from web services into Camlistore
-- (Flickr, LJ, Facebook, Twitter, Foursquare, etc)
+- Flickr, Foursquare, Picasa, Pinboard, RSS, Twitter etc
+- Incremental and periodic, or on demand
 - export to whoever you want, under any API
-
-* Storing big files
-
-- rolling checksums
-- 32-bit checksum over 64 byte rolling window
-- 14 or more lower bits sets: break point
-- more bits -> stronger break
-- blobpacked (later)
 
 * FUSE
 
 - proper filesystem, not rsync hackery
 - can have TBs logically available on 100 GB laptop
+- allows for "Time Machine" utility (on mac)
 
 * Web UI
 
-- React
-- Infinite scroll
-- Lightbox
-- HTML history API
-- Search
+- React, Closure, Lightbox, Infinite scroll, HTML history API...
+- Search bar, main menu, contextual slider, aspects...
+- blobRef based URLs
+- permanode: attributes editing, mass selection/tagging, deletion
+- rendering for images, videos, tweets, checkins...
+- pages: importers, status (with restart), help
+- QR code page for mobile configuration
+- debug console
 
-* Search
-
-- low-level structured search (nested tree of operators, fields, set unions/intersections, etc)
-- high-level one-liner expression search ("is:image -format:jpeg")
-
-* Tools
+* Command-line tools
 
 - camget (blobs, trees, shares)
 - camput (blobs, files, dirs, shares, permanodes, claims)
-- camtool {init,sync,init,describe,claims,...}
 - cammount
 
-* Go does:
+* Command-line tools: camtool
 
-- HTTP, HTTPS
-- JSON
-- WebSockets
-- SMTP server
-- Rolling checksums
-- Image resizing / thumbnails
-- FUSE
-- Notification bus
-- OpenPGP signing & verification
-- ....
+- search
+- debug
+- index
+- list
+- makestatic
+- claims
+- describe
+- searchdoc
+- sync
+- packblobs
+- discovery
+- dumpconfig
+- env
 
-* More demos, questions
+* (Server) Apps
+
+- Publisher, mainly for photos
+- Scanning Cabinet (soon)
+
+* Mobile
+
+- android: sends your photos to Camlistore server
+- ios: ?
+
+* Public launchers
+
+Google Cloud:
+
+- https://camlistore.org/launch
+- camlistored docker image on CoreOS on GCE
+- data on Google Cloud Storage
+- blobpacked
+- HTTP/2
+
+* Public launchers
+
+Scaleway:
+
+- https://www.scaleway.com/imagehub/camlistore/
+- https://github.com/scaleway-community/scaleway-camlistore/
+- cheap, but moving target, limited access for now
+
